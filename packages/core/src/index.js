@@ -19,7 +19,7 @@ import {
   HOOK_CLEANUP,
 } from './constants';
 import { computeKey } from './computeKey';
-import { vnodesForComponent, mappedVNodes } from './runtime/vnodesForComponent';
+import { internalsByNodeType } from './runtime/vnodesForComponent';
 import { signaturesForType } from './runtime/signaturesForType';
 
 let typesById = new Map();
@@ -44,34 +44,35 @@ function sign(type, key, forceReset, getCustomHooks, status) {
 }
 
 function replaceComponent(OldType, NewType, resetHookState) {
-  const vnodes = vnodesForComponent.get(OldType);
-  if (!vnodes) return;
+  const internals = internalsByNodeType.get(OldType);
+  if (!internals) return;
 
   // migrate the list to our new constructor reference
-  vnodesForComponent.delete(OldType);
-  vnodesForComponent.set(NewType, vnodes);
+  internalsByNodeType.delete(OldType);
+  internalsByNodeType.set(NewType, internals);
 
-  mappedVNodes.set(OldType, NewType);
+  // mappedVNodes.set(OldType, NewType);
 
   pendingUpdates = pendingUpdates.filter(p => p[0] !== OldType);
 
-  vnodes.forEach(vnode => {
+  internals.forEach(internal => {
     // update the type in-place to reference the new component
-    vnode.type = NewType;
+    internal.type = NewType;
+    internal._vnodeId++;
 
-    if (vnode[VNODE_COMPONENT]) {
-      vnode[VNODE_COMPONENT].constructor = vnode.type;
+    if (internal[VNODE_COMPONENT]) {
+      internal[VNODE_COMPONENT].constructor = internal.type;
 
       try {
-        if (vnode[VNODE_COMPONENT] instanceof OldType) {
-          const oldInst = vnode[VNODE_COMPONENT];
+        if (internal[VNODE_COMPONENT] instanceof OldType) {
+          const oldInst = internal[VNODE_COMPONENT];
 
           const newInst = new NewType(
-            vnode[VNODE_COMPONENT].props,
-            vnode[VNODE_COMPONENT].context
+            internal[VNODE_COMPONENT].props,
+            internal[VNODE_COMPONENT].context
           );
 
-          vnode[VNODE_COMPONENT] = newInst;
+          internal[VNODE_COMPONENT] = newInst;
           // copy old properties onto the new instance.
           //   - Objects (including refs) in the new instance are updated with their old values
           //   - Missing or null properties are restored to their old values
@@ -96,16 +97,16 @@ function replaceComponent(OldType, NewType, resetHookState) {
         }
       } catch (e) {
         /* Functional component */
-        vnode[VNODE_COMPONENT].constructor = NewType;
+        internal[VNODE_COMPONENT].constructor = NewType;
       }
 
       if (resetHookState) {
         if (
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS] &&
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST] &&
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].length
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS] &&
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST] &&
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].length
         ) {
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].forEach(
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].forEach(
             possibleEffect => {
               if (
                 possibleEffect[HOOK_CLEANUP] &&
@@ -130,17 +131,17 @@ function replaceComponent(OldType, NewType, resetHookState) {
           );
         }
 
-        vnode[VNODE_COMPONENT][COMPONENT_HOOKS] = {
+        internal[VNODE_COMPONENT][COMPONENT_HOOKS] = {
           [HOOKS_LIST]: [],
           [EFFECTS_LIST]: [],
         };
       } else {
         if (
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS] &&
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST] &&
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].length
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS] &&
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST] &&
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].length
         ) {
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].forEach(
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].forEach(
             possibleEffect => {
               if (
                 possibleEffect[HOOK_CLEANUP] &&
@@ -164,12 +165,9 @@ function replaceComponent(OldType, NewType, resetHookState) {
             }
           );
 
-          vnode[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].forEach(
+          internal[VNODE_COMPONENT][COMPONENT_HOOKS][HOOKS_LIST].forEach(
             hook => {
-              if (
-                hook.__H &&
-                Array.isArray(hook.__H)
-              ) {
+              if (hook.__H && Array.isArray(hook.__H)) {
                 hook.__H = undefined;
               }
             }
@@ -179,13 +177,13 @@ function replaceComponent(OldType, NewType, resetHookState) {
 
       // Cleanup when an async component has thrown.
       if (
-        (vnode[VNODE_DOM] && !document.contains(vnode[VNODE_DOM])) ||
-        (!vnode[VNODE_DOM] && !vnode[VNODE_CHILDREN])
+        (internal[VNODE_DOM] && !document.contains(internal[VNODE_DOM])) ||
+        (!internal[VNODE_DOM] && !internal[VNODE_CHILDREN])
       ) {
         location.reload();
       }
 
-      Component.prototype.forceUpdate.call(vnode[VNODE_COMPONENT]);
+      Component.prototype.forceUpdate.call(internal[VNODE_COMPONENT]);
     }
   });
 }

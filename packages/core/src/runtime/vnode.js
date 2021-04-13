@@ -1,31 +1,33 @@
 import { options } from 'preact';
-import { vnodesForComponent, mappedVNodes } from './vnodesForComponent';
-import { VNODE_COMPONENT } from '../constants';
+import { internalsByNodeType } from './vnodesForComponent';
 
-const getMappedVnode = type => {
-  if (mappedVNodes.has(type)) {
-    return getMappedVnode(mappedVNodes.get(type));
-  }
+// const getMappedVnode = type => {
+//   if (mappedVNodes.has(type)) {
+//     return getMappedVnode(mappedVNodes.get(type));
+//   }
 
-  return type;
-};
+//   return type;
+// };
 
-const oldVnode = options.vnode;
-options.vnode = vnode => {
+const INTERNAL_OPTION = '__i';
+
+const oldInternal = options[INTERNAL_OPTION];
+options[INTERNAL_OPTION] = (internal, vnode) => {
   if (vnode && typeof vnode.type === 'function') {
-    const vnodes = vnodesForComponent.get(vnode.type);
+    const internals = internalsByNodeType.get(vnode.type);
     if (!vnodes) {
-      vnodesForComponent.set(vnode.type, [vnode]);
+      internalsByNodeType.set(vnode.type, [internal]);
     } else {
-      vnodes.push(vnode);
+      internals.push(internal);
     }
 
-    const foundType = getMappedVnode(vnode.type);
-    vnode.type = foundType;
-    if (vnode[VNODE_COMPONENT]) {
-      vnode[VNODE_COMPONENT].constructor = foundType;
-    }
+    // TODO: will this still be needed? https://github.com/JoviDeCroock/prefresh/pull/236
+    // const foundType = getMappedVnode(vnode.type);
+    // vnode.type = foundType;
+    // if (vnode[VNODE_COMPONENT]) {
+    //   vnode[VNODE_COMPONENT].constructor = foundType;
+    // }
   }
 
-  if (oldVnode) oldVnode(vnode);
+  if (oldInternal) oldInternal(internal, vnode);
 };
